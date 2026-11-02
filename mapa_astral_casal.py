@@ -70,7 +70,6 @@ COMPATIBILIDADE = {
     )
 }
 
-# Mapeamento simples de signos para elementos
 ELEMENTOS = {
     "Áries": "Fogo", "Leão": "Fogo", "Sagitário": "Fogo",
     "Touro": "Terra", "Virgem": "Terra", "Capricórnio": "Terra",
@@ -150,6 +149,7 @@ def index():
             h1 { color: #c084fc; text-align: center; font-size: 22px; }
             label { display: block; margin-top: 12px; font-weight: bold; color: #cbd5e1; font-size: 14px; }
             input, select { width: 100%; padding: 10px; margin-top: 5px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: #fff; box-sizing: border-box; font-size: 14px; }
+            input::placeholder { color: #64748b; }
             .btn { display: block; width: 100%; background-color: #9333ea; color: white; padding: 12px; text-decoration: none; border: none; border-radius: 6px; font-weight: bold; margin-top: 20px; cursor: pointer; text-align: center; font-size: 16px; transition: background 0.2s; }
             .btn:hover { background-color: #7e22ce; }
         </style>
@@ -159,7 +159,7 @@ def index():
             <h1>✨ Mapa Astral do Casal ✨</h1>
             <form action="/gerar" method="POST">
                 <label>Nome do Parceiro 1:</label>
-                <input type="text" name="nome1" required value="Ana">
+                <input type="text" name="nome1" required placeholder="Ex: Ana">
                 
                 <label>Signo do Parceiro 1:</label>
                 <select name="signo1">
@@ -178,7 +178,7 @@ def index():
                 </select>
 
                 <label>Nome do Parceiro 2:</label>
-                <input type="text" name="nome2" required value="Bruno">
+                <input type="text" name="nome2" required placeholder="Ex: Bruno">
                 
                 <label>Signo do Parceiro 2:</label>
                 <select name="signo2">
@@ -197,7 +197,7 @@ def index():
                 </select>
 
                 <label>E-mail para contacto:</label>
-                <input type="email" name="email" required value="exemplo@email.com">
+                <input type="email" name="email" required placeholder="exemplo@email.com">
 
                 <button type="submit" class="btn">Gerar Mapa Astral</button>
             </form>
