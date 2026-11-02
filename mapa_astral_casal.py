@@ -1259,15 +1259,73 @@ HTML_FORMULARIO = """
 <html lang="pt">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mapa Astral do Casal - Insira os Dados</title>
     <style>
-        body { background-color: #150726; color: #FFF8E6; font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .card { background: #2E1065; padding: 30px; border-radius: 12px; border: 1px solid #D4AF37; width: 350px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        h2 { color: #D4AF37; text-align: center; margin-bottom: 20px; }
-        label { display: block; margin-top: 12px; color: #A78BFA; font-size: 14px; }
-        input { width: 100%; padding: 10px; margin-top: 5px; border-radius: 6px; border: 1px solid #A78BFA; background: #150726; color: white; box-sizing: border-box; }
-        button { width: 100%; background: #7C3AED; color: white; border: none; padding: 12px; border-radius: 6px; margin-top: 20px; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        button:hover { background: #D4AF37; color: #150726; }
+        body { 
+            background-color: #150726; 
+            color: #FFF8E6; 
+            font-family: Arial, sans-serif; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh; 
+            margin: 0; 
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .card { 
+            background: #2E1065; 
+            padding: 25px 20px; 
+            border-radius: 12px; 
+            border: 1px solid #D4AF37; 
+            width: 100%; 
+            max-width: 400px; 
+            box-shadow: 0 4px 20px rgba(0,0,0,0.6); 
+            box-sizing: border-box;
+        }
+        h2 { 
+            color: #D4AF37; 
+            text-align: center; 
+            margin-top: 0;
+            margin-bottom: 20px; 
+            font-size: 22px;
+        }
+        label { 
+            display: block; 
+            margin-top: 14px; 
+            color: #A78BFA; 
+            font-size: 14px; 
+            font-weight: bold;
+        }
+        input { 
+            width: 100%; 
+            padding: 12px; 
+            margin-top: 6px; 
+            border-radius: 6px; 
+            border: 1px solid #A78BFA; 
+            background: #150726; 
+            color: white; 
+            font-size: 16px;
+            box-sizing: border-box; 
+        }
+        button { 
+            width: 100%; 
+            background: #7C3AED; 
+            color: white; 
+            border: none; 
+            padding: 14px; 
+            border-radius: 6px; 
+            margin-top: 25px; 
+            font-size: 16px;
+            font-weight: bold; 
+            cursor: pointer; 
+            transition: 0.2s; 
+        }
+        button:hover { 
+            background: #D4AF37; 
+            color: #150726; 
+        }
     </style>
 </head>
 <body>
