@@ -70,7 +70,7 @@ COMPATIBILIDADE = {
     )
 }
 
-# Mapeamento simples de signos para elementos (exemplo funcional)
+# Mapeamento simples de signos para elementos
 ELEMENTOS = {
     "Áries": "Fogo", "Leão": "Fogo", "Sagitário": "Fogo",
     "Touro": "Terra", "Virgem": "Terra", "Capricórnio": "Terra",
@@ -97,7 +97,6 @@ def gerar_pdf_mapa(nome1, signo1, nome2, signo2, email):
     doc = SimpleDocTemplate(filepath, pagesize=letter, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
     styles = getSampleStyleSheet()
     
-    # Estilos customizados
     title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontName='Helvetica-Bold', fontSize=22, textColor=colors.HexColor('#6b21a8'), alignment=1, spaceAfter=15)
     subtitle_style = ParagraphStyle('SubStyle', parent=styles['Normal'], fontName='Helvetica-Oblique', fontSize=12, textColor=colors.HexColor('#4b5563'), alignment=1, spaceAfter=20)
     heading_style = ParagraphStyle('HeadStyle', parent=styles['Heading2'], fontName='Helvetica-Bold', fontSize=14, textColor=colors.HexColor('#7c3aed'), spaceBefore=12, spaceAfter=6)
@@ -138,7 +137,74 @@ def gerar_pdf_mapa(nome1, signo1, nome2, signo2, email):
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return """
+    <!DOCTYPE html>
+    <html lang="pt">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Mapa Astral do Casal</title>
+        <style>
+            body { font-family: sans-serif; background-color: #0f172a; color: #f8fafc; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; box-sizing: border-box; }
+            .container { width: 100%; max-width: 500px; background: #1e293b; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+            h1 { color: #c084fc; text-align: center; font-size: 22px; }
+            label { display: block; margin-top: 12px; font-weight: bold; color: #cbd5e1; font-size: 14px; }
+            input, select { width: 100%; padding: 10px; margin-top: 5px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: #fff; box-sizing: border-box; font-size: 14px; }
+            .btn { display: block; width: 100%; background-color: #9333ea; color: white; padding: 12px; text-decoration: none; border: none; border-radius: 6px; font-weight: bold; margin-top: 20px; cursor: pointer; text-align: center; font-size: 16px; transition: background 0.2s; }
+            .btn:hover { background-color: #7e22ce; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>✨ Mapa Astral do Casal ✨</h1>
+            <form action="/gerar" method="POST">
+                <label>Nome do Parceiro 1:</label>
+                <input type="text" name="nome1" required value="Ana">
+                
+                <label>Signo do Parceiro 1:</label>
+                <select name="signo1">
+                    <option value="Áries">Áries</option>
+                    <option value="Leão">Leão</option>
+                    <option value="Sagitário">Sagitário</option>
+                    <option value="Touro">Touro</option>
+                    <option value="Virgem">Virgem</option>
+                    <option value="Capricórnio">Capricórnio</option>
+                    <option value="Gêmeos">Gêmeos</option>
+                    <option value="Libra">Libra</option>
+                    <option value="Aquário">Aquário</option>
+                    <option value="Câncer">Câncer</option>
+                    <option value="Escorpião">Escorpião</option>
+                    <option value="Peixes">Peixes</option>
+                </select>
+
+                <label>Nome do Parceiro 2:</label>
+                <input type="text" name="nome2" required value="Bruno">
+                
+                <label>Signo do Parceiro 2:</label>
+                <select name="signo2">
+                    <option value="Áries">Áries</option>
+                    <option value="Leão">Leão</option>
+                    <option value="Sagitário">Sagitário</option>
+                    <option value="Touro">Touro</option>
+                    <option value="Virgem">Virgem</option>
+                    <option value="Capricórnio">Capricórnio</option>
+                    <option value="Gêmeos">Gêmeos</option>
+                    <option value="Libra">Libra</option>
+                    <option value="Aquário">Aquário</option>
+                    <option value="Câncer">Câncer</option>
+                    <option value="Escorpião">Escorpião</option>
+                    <option value="Peixes">Peixes</option>
+                </select>
+
+                <label>E-mail para contacto:</label>
+                <input type="email" name="email" required value="exemplo@email.com">
+
+                <button type="submit" class="btn">Gerar Mapa Astral</button>
+            </form>
+        </div>
+    </body>
+    </html>
+    """
 
 @app.route('/gerar', methods=['POST'])
 def gerar():
@@ -150,7 +216,6 @@ def gerar():
     
     filename = gerar_pdf_mapa(nome1, signo1, nome2, signo2, email)
     
-    # HTML direto na resposta com o botão de download integrado
     return f"""
     <!DOCTYPE html>
     <html lang="pt">
@@ -159,17 +224,18 @@ def gerar():
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Mapa Gerado</title>
         <style>
-            body {{ font-family: sans-serif; background-color: #0f172a; color: #f8fafc; text-align: center; padding: 50px; }}
-            .container {{ max-width: 600px; margin: auto; background: #1e293b; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }}
-            h1 {{ color: #c084fc; }}
-            .btn {{ display: inline-block; background-color: #9333ea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; margin-top: 20px; transition: background 0.2s; }}
+            body {{ font-family: sans-serif; background-color: #0f172a; color: #f8fafc; text-align: center; padding: 40px 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; box-sizing: border-box; }}
+            .container {{ width: 100%; max-width: 500px; background: #1e293b; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }}
+            h1 {{ color: #c084fc; font-size: 22px; }}
+            p {{ color: #cbd5e1; font-size: 14px; }}
+            .btn {{ display: inline-block; background-color: #9333ea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; margin-top: 20px; transition: background 0.2s; font-size: 16px; }}
             .btn:hover {{ background-color: #7e22ce; }}
         </style>
     </head>
     <body>
         <div class="container">
             <h1>✨ Mapa Gerado com Sucesso! ✨</h1>
-            <p>Obrigado, {email}! O mapa astral de {nome1} e {nome2} foi criado.</p>
+            <p>Obrigado, {email}! O mapa astral de {nome1} e {nome2} foi criado com sucesso.</p>
             <br>
             <a href="/download/{filename}" class="btn">📥 Descarregar PDF do Mapa</a>
         </div>
@@ -183,4 +249,3 @@ def download_file(filename):
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
-    
