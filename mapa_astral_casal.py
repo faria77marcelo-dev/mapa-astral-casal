@@ -27,8 +27,8 @@ os.makedirs(PDF_DIR, exist_ok=True)
 # 0. PALETA, FONTES E CONSTANTES
 # ==========================================
 
-W, H = letter
-MARGEM = 48
+W, H = 360, 780  # formato de tela de celular (antes: letter)
+MARGEM = 20
 LARGURA = W - 2 * MARGEM
 
 ROXO_NOITE = colors.HexColor('#150726')
@@ -459,47 +459,115 @@ def obter_analise_exclusiva(signo1, signo2):
 
 
 # ==========================================
-# 2. COMPONENTES VISUAIS E DECORAÇÃO
+# 2. COMPONENTES VISUAIS E DECORAÇÃO (formato celular)
 # ==========================================
 
-class Medidor(Flowable):
-    def __init__(self, score, size=132):
+# Na roleta da capa, use True para desenhar os símbolos ♈ ♉ ... (precisa da fonte DejaVu).
+# Com False, a roleta mostra as abreviações ÁRI, TOU, GÊM...
+ROLETA_COM_SIMBOLOS = False
+
+# As páginas de conteúdo são mais altas que a capa, para ter menos cortes entre as seções.
+HC = 1000
+ABREV_SIGNOS = ["ÁRI", "TOU", "GÊM", "CÂN", "LEÃ", "VIR", "LIB", "ESC", "SAG", "CAP", "AQU", "PEI"]
+
+VERDE = colors.HexColor('#1F6B4A')
+VERDE_CLARO = colors.HexColor('#2F9C6E')
+LARANJA = colors.HexColor('#9A4A12')
+LARANJA_CLARO = colors.HexColor('#E08A3C')
+CINZA_SUAVE = colors.HexColor('#6B6384')
+OURO_BORDA = colors.HexColor('#ECD68A')
+
+
+def cap1(txt):
+    return txt[:1].upper() + txt[1:] if txt else txt
+
+
+class CaixaArredondada(Flowable):
+    """Cartão com cantos arredondados que empilha outros elementos dentro."""
+
+    def __init__(self, conteudo, largura, fundo=colors.white, borda=LILAS_CLARO,
+                 espessura=0.9, raio=12, pad_x=16, pad_y=16):
         super().__init__()
-        self.score = score
-        self.size = size
-        self.width = size
-        self.height = size
-        self.hAlign = 'CENTER'
+        self.conteudo = conteudo
+        self.largura = largura
+        self.fundo = fundo
+        self.borda = borda
+        self.espessura = espessura
+        self.raio = raio
+        self.pad_x = pad_x
+        self.pad_y = pad_y
+        self._itens = []
+
+    def wrap(self, aw, ah):
+        interno = self.largura - 2 * self.pad_x
+        self._itens = []
+        total = 0
+        for f in self.conteudo:
+            _, h = f.wrap(interno, 10000)
+            self._itens.append((f, h))
+            total += h
+        self.width = self.largura
+        self.height = total + 2 * self.pad_y
+        return self.width, self.height
 
     def draw(self):
         c = self.canv
-        cx = cy = self.size / 2
-        r = self.size / 2 - 9
-        c.setLineWidth(11)
-        c.setLineCap(1)
-        c.setStrokeColor(LILAS_CLARO)
-        c.circle(cx, cy, r, stroke=1, fill=0)
-        extensao = 3.6 * self.score
-        c.setStrokeColor(ROXO_VIVO)
-        c.arc(cx - r, cy - r, cx + r, cy + r, 90 - extensao, extensao)
-        ang = math.radians(90 - extensao)
-        c.setFillColor(OURO)
-        c.circle(cx + r * math.cos(ang), cy + r * math.sin(ang), 6, stroke=0, fill=1)
-        c.setFillColor(ROXO_PROFUNDO)
-        c.setFont("Times-Bold", 34)
-        c.drawCentredString(cx, cy - 7, f"{self.score}%")
-        c.setFont("Helvetica", 7)
-        c.setFillColor(OURO_ESCURO)
-        c.drawCentredString(cx, cy - 22, "AFINIDADE")
+        c.setFillColor(self.fundo)
+        c.setStrokeColor(self.borda)
+        c.setLineWidth(self.espessura)
+        c.roundRect(0, 0, self.width, self.height, self.raio, stroke=1, fill=1)
+        y = self.height - self.pad_y
+        for f, h in self._itens:
+            y -= h
+            f.drawOn(c, self.pad_x, y)
+
+
+class Pilulas(Flowable):
+    """Etiquetas (chips) que quebram de linha sozinhas."""
+
+    def __init__(self, textos, largura, fonte="Helvetica-Bold", tam=12.5):
+        super().__init__()
+        self.textos = textos
+        self.largura = largura
+        self.fonte = fonte
+        self.tam = tam
+        self.alt = 25
+        self.gap = 7
+
+    def wrap(self, aw, ah):
+        x, linha = 0, 0
+        self.pos = []
+        for t in self.textos:
+            w = stringWidth(t, self.fonte, self.tam) + 24
+            if x + w > self.largura and x > 0:
+                x, linha = 0, linha + 1
+            self.pos.append((x, linha, w, t))
+            x += w + self.gap
+        self.width = self.largura
+        self.height = (linha + 1) * self.alt + linha * self.gap
+        return self.width, self.height
+
+    def draw(self):
+        c = self.canv
+        for x, l, w, t in self.pos:
+            y = self.height - (l + 1) * self.alt - l * self.gap
+            c.setFillColor(LILAS_FUNDO)
+            c.setStrokeColor(LILAS_CLARO)
+            c.setLineWidth(0.9)
+            c.roundRect(x, y, w, self.alt, self.alt / 2, stroke=1, fill=1)
+            c.setFillColor(ROXO_PROFUNDO)
+            c.setFont(self.fonte, self.tam)
+            c.drawCentredString(x + w / 2, y + self.alt / 2 - self.tam * 0.35, t)
 
 
 class BarraCompat(Flowable):
-    def __init__(self, rotulo, valor, largura):
+    def __init__(self, rotulo, valor, largura, destaque=False):
         super().__init__()
         self.rotulo = rotulo
         self.valor = valor
+        self.destaque = destaque
         self.width = largura
-        self.height = 30
+        self.height = 40
 
     def wrap(self, aw, ah):
         return self.width, self.height
@@ -507,18 +575,15 @@ class BarraCompat(Flowable):
     def draw(self):
         c = self.canv
         w = self.width
+        c.setFillColor(TEXTO)
+        c.setFont("Helvetica-Bold", 13)
+        c.drawString(0, 26, self.rotulo)
         c.setFillColor(ROXO_PROFUNDO)
-        c.setFont("Helvetica-Bold", 9.5)
-        c.drawString(0, 19, self.rotulo)
-        c.setFillColor(OURO_ESCURO)
-        c.drawRightString(w, 19, f"{self.valor}%")
-        c.setFillColor(LILAS_CLARO)
-        c.roundRect(0, 4, w, 8, 4, stroke=0, fill=1)
-        c.setFillColor(ROXO_VIVO)
-        largura_fill = max(10, w * self.valor / 100)
-        c.roundRect(0, 4, largura_fill, 8, 4, stroke=0, fill=1)
-        c.setFillColor(OURO)
-        c.circle(largura_fill - 4, 8, 4.2, stroke=0, fill=1)
+        c.drawRightString(w, 26, f"{self.valor}%")
+        c.setFillColor(LILAS_FUNDO)
+        c.roundRect(0, 6, w, 11, 5.5, stroke=0, fill=1)
+        c.setFillColor(OURO if self.destaque else ROXO_VIVO)
+        c.roundRect(0, 6, max(12, w * self.valor / 100), 11, 5.5, stroke=0, fill=1)
 
 
 class IconeElemento(Flowable):
@@ -529,7 +594,7 @@ class IconeElemento(Flowable):
         "Água": colors.HexColor('#6366F1'),
     }
 
-    def __init__(self, elem, size=38):
+    def __init__(self, elem, size=46):
         super().__init__()
         self.elem = elem
         self.size = size
@@ -542,7 +607,7 @@ class IconeElemento(Flowable):
         c.setFillColor(self.CORES[self.elem])
         c.circle(s / 2, s / 2, s / 2, stroke=0, fill=1)
         c.setStrokeColor(colors.white)
-        c.setLineWidth(1.7)
+        c.setLineWidth(2)
         cx, cy, a = s / 2, s / 2, s * 0.26
         acima = self.elem in ("Fogo", "Ar")
         if acima:
@@ -559,6 +624,101 @@ class IconeElemento(Flowable):
         c.drawPath(p, stroke=1, fill=0)
         if self.elem in ("Ar", "Terra"):
             c.line(cx - a * 0.63, y_barra, cx + a * 0.63, y_barra)
+
+
+class Jornada(Flowable):
+    """Linha do tempo vertical com bolinhas numeradas."""
+
+    def __init__(self, etapas, largura, est):
+        super().__init__()
+        self.etapas = etapas
+        self.largura = largura
+        self.est = est
+        self.gap = 20
+        self.bola = 28
+
+    def wrap(self, aw, ah):
+        tw = self.largura - 44
+        self.blocos = []
+        total = 0
+        for n, titulo, texto in self.etapas:
+            p1 = Paragraph(titulo.upper(), self.est['EtapaTitulo'])
+            p2 = Paragraph(escape(texto), self.est['Corpo'])
+            _, h1 = p1.wrap(tw, 10000)
+            _, h2 = p2.wrap(tw, 10000)
+            h = self.bola + 4 + h2
+            self.blocos.append((n, p1, p2, h1, h2, h))
+            total += h
+        total += self.gap * (len(self.blocos) - 1)
+        self.width = self.largura
+        self.height = total
+        return self.width, self.height
+
+    def draw(self):
+        c = self.canv
+        y = self.height
+        tops = []
+        for b in self.blocos:
+            tops.append(y)
+            y -= b[5] + self.gap
+        c.setStrokeColor(LILAS_CLARO)
+        c.setLineWidth(2)
+        for i in range(len(tops) - 1):
+            c.line(self.bola / 2, tops[i] - self.bola, self.bola / 2, tops[i + 1])
+        for top, (n, p1, p2, h1, h2, h) in zip(tops, self.blocos):
+            c.setFillColor(OURO)
+            c.circle(self.bola / 2, top - self.bola / 2, self.bola / 2, stroke=0, fill=1)
+            c.setFillColor(ROXO_NOITE)
+            c.setFont("Helvetica-Bold", 14)
+            c.drawCentredString(self.bola / 2, top - self.bola / 2 - 5, str(n))
+            p1.drawOn(c, 44, top - self.bola / 2 - h1 / 2)
+            p2.drawOn(c, 44, top - self.bola - 4 - h2)
+
+
+class CartaoDia(Flowable):
+    """Um dia do ritual: círculo com o número e texto ao lado."""
+
+    def __init__(self, n, titulo, texto, largura, est):
+        super().__init__()
+        self.n = n
+        self.titulo = titulo
+        self.texto = texto
+        self.largura = largura
+        self.est = est
+        self.circ = 50
+
+    def wrap(self, aw, ah):
+        tx = 16 + self.circ + 14
+        tw = self.largura - tx - 14
+        self.p1 = Paragraph(escape(self.titulo), self.est['DiaTitulo'])
+        self.p2 = Paragraph(escape(self.texto), self.est['Corpo'])
+        _, self.h1 = self.p1.wrap(tw, 10000)
+        _, self.h2 = self.p2.wrap(tw, 10000)
+        self.tx = tx
+        self.width = self.largura
+        self.height = max(self.circ, self.h1 + 3 + self.h2) + 28
+        return self.width, self.height
+
+    def draw(self):
+        c = self.canv
+        c.setFillColor(colors.white)
+        c.setStrokeColor(LILAS_CLARO)
+        c.setLineWidth(0.9)
+        c.roundRect(0, 0, self.width, self.height, 12, stroke=1, fill=1)
+        topo = self.height - 14
+        cx, cy = 16 + self.circ / 2, topo - self.circ / 2
+        c.setFillColor(CREME)
+        c.setStrokeColor(OURO)
+        c.setLineWidth(1.8)
+        c.circle(cx, cy, self.circ / 2, stroke=1, fill=1)
+        c.setFillColor(CINZA_SUAVE)
+        c.setFont("Helvetica-Bold", 7.5)
+        c.drawCentredString(cx, cy + 9, "DIA")
+        c.setFillColor(ROXO_PROFUNDO)
+        c.setFont("Helvetica-Bold", 20)
+        c.drawCentredString(cx, cy - 12, str(self.n))
+        self.p1.drawOn(c, self.tx, topo - self.h1)
+        self.p2.drawOn(c, self.tx, topo - self.h1 - 3 - self.h2)
 
 
 def texto_esp(canvas, x, y, txt, fonte, tamanho, cor, espaco=0, alinhar='left'):
@@ -609,7 +769,7 @@ def ajustar_fonte(txt, fonte, tamanho, largura_max):
 
 def desenhar_capa(canvas, doc, ctx):
     canvas.saveState()
-    passos = 120
+    passos = 140
     topo = (0x15 / 255, 0x07 / 255, 0x26 / 255)
     base = (0x45 / 255, 0x1A / 255, 0x8C / 255)
     for i in range(passos):
@@ -617,149 +777,142 @@ def desenhar_capa(canvas, doc, ctx):
         canvas.setFillColorRGB(*[topo[k] + (base[k] - topo[k]) * t for k in range(3)])
         canvas.rect(0, H - (i + 1) * H / passos, W, H / passos + 1, stroke=0, fill=1)
 
-    cx, cy = W / 2, 405
-    for raio, alfa in [(330, 0.035), (285, 0.04), (245, 0.05)]:
+    cx, cy = W / 2, 430
+    for raio, alfa in [(270, 0.035), (230, 0.04), (195, 0.05)]:
         canvas.setFillColor(ROXO_VIVO)
         canvas.setFillAlpha(alfa)
         canvas.circle(cx, cy, raio, stroke=0, fill=1)
     canvas.setFillAlpha(1)
 
     rnd = random.Random(11)
-    for _ in range(170):
-        x, y = rnd.uniform(8, W - 8), rnd.uniform(8, H - 8)
-        r = rnd.choice([0.5, 0.7, 0.9, 1.2, 1.6])
+    for _ in range(120):
+        x, y = rnd.uniform(6, W - 6), rnd.uniform(6, H - 6)
+        r = rnd.choice([0.5, 0.7, 0.9, 1.2, 1.5])
         canvas.setFillColor(rnd.choice([OURO, colors.white, LILAS]))
         canvas.setFillAlpha(rnd.choice([0.25, 0.4, 0.6, 0.8]))
         canvas.circle(x, y, r, stroke=0, fill=1)
     canvas.setFillAlpha(1)
 
-    ornamento(canvas, W / 2, H - 62)
-    texto_esp(canvas, W / 2, H - 100, "MAPA ASTRAL", "Helvetica-Bold", 36, colors.white, 8, 'center')
-    texto_esp(canvas, W / 2, H - 130, "DO CASAL", "Helvetica", 17, OURO, 13, 'center')
-    texto_esp(canvas, W / 2, H - 154, "UM OLHAR SOBRE A ENERGIA QUE UNE VOCÊS", "Helvetica", 7.5, LILAS, 2.6, 'center')
+    # Título
+    ornamento(canvas, cx, H - 58, 85)
+    texto_esp(canvas, cx, H - 96, "MAPA ASTRAL", "Helvetica-Bold", 30, colors.white, 6, 'center')
+    texto_esp(canvas, cx, H - 124, "DO CASAL", "Helvetica", 14, OURO, 10, 'center')
+    texto_esp(canvas, cx, H - 148, "UM OLHAR SOBRE A ENERGIA QUE UNE", "Helvetica", 9, LILAS, 2.4, 'center')
+    texto_esp(canvas, cx, H - 162, "VOCÊ E SEU AMOR", "Helvetica", 9, LILAS, 2.4, 'center')
 
-    r_out, r_mid, r_in = 200, 152, 136
+    # Roleta do zodíaco
+    r_out = 160
+    s = r_out / 192.0
+    r_mid, r_a, r_b, r_lab, r_bola = 138 * s, 112 * s, 90 * s, 165 * s, 22 * s
+
     canvas.setFillColor(ROXO_NOITE)
     canvas.setFillAlpha(0.55)
     canvas.circle(cx, cy, r_out, stroke=0, fill=1)
+    canvas.setFillColor(ROXO_PROFUNDO)
+    canvas.circle(cx, cy, r_mid, stroke=0, fill=1)
     canvas.setFillAlpha(1)
     canvas.setStrokeColor(OURO)
-    canvas.setLineWidth(1.5)
+    canvas.setLineWidth(1.6)
     canvas.circle(cx, cy, r_out, stroke=1, fill=0)
-    canvas.setLineWidth(0.8)
+    canvas.setLineWidth(1.2)
     canvas.circle(cx, cy, r_mid, stroke=1, fill=0)
-    canvas.setStrokeColor(LILAS)
-    canvas.setLineWidth(0.5)
-    canvas.setStrokeAlpha(0.5)
-    canvas.circle(cx, cy, r_in, stroke=1, fill=0)
-    canvas.circle(cx, cy, r_in - 22, stroke=1, fill=0)
-    canvas.setStrokeAlpha(1)
-
     canvas.setStrokeColor(OURO)
     canvas.setLineWidth(0.6)
+    canvas.setStrokeAlpha(0.35)
+    canvas.circle(cx, cy, r_a, stroke=1, fill=0)
+    canvas.setStrokeAlpha(0.25)
+    canvas.circle(cx, cy, r_b, stroke=1, fill=0)
+
+    canvas.setStrokeColor(OURO)
+    canvas.setLineWidth(0.8)
     canvas.setStrokeAlpha(0.7)
     for i in range(12):
-        ang = math.radians(90 - i * 30)
+        ang = math.radians(90 - i * 30 + 15)
         canvas.line(cx + r_mid * math.cos(ang), cy + r_mid * math.sin(ang),
                     cx + r_out * math.cos(ang), cy + r_out * math.sin(ang))
     canvas.setStrokeAlpha(1)
 
     nomes_signos = [n for n, _ in ZODIACO]
     idx_casal = [nomes_signos.index(ctx["s1"]), nomes_signos.index(ctx["s2"])]
-    r_simb = (r_mid + r_out) / 2
+
+    def pos_signo(i):
+        ang = math.radians(90 - i * 30)
+        return cx + r_lab * math.cos(ang), cy + r_lab * math.sin(ang)
+
+    if idx_casal[0] != idx_casal[1]:
+        (xa, ya), (xb, yb) = pos_signo(idx_casal[0]), pos_signo(idx_casal[1])
+        canvas.setStrokeColor(OURO)
+        canvas.setLineWidth(1.6)
+        canvas.line(xa, ya, xb, yb)
+
     for i, (nome, simb) in enumerate(ZODIACO):
-        ang = math.radians(75 - i * 30)
-        x, y = cx + r_simb * math.cos(ang), cy + r_simb * math.sin(ang)
+        x, y = pos_signo(i)
         destaque = i in idx_casal
         if destaque:
             canvas.setFillColor(OURO)
-            canvas.circle(x, y, 19, stroke=0, fill=1)
-        canvas.setFillColor(ROXO_NOITE if destaque else LILAS_CLARO)
-        if FONTE_SIMBOLOS:
-            canvas.setFont(FONTE_SIMBOLOS, 24)
-            canvas.drawCentredString(x, y - 8.5, simb)
+            canvas.circle(x, y, r_bola, stroke=0, fill=1)
+        canvas.setFillColor(ROXO_NOITE if destaque else colors.white)
+        if ROLETA_COM_SIMBOLOS and FONTE_SIMBOLOS:
+            canvas.setFont(FONTE_SIMBOLOS, 20)
+            canvas.drawCentredString(x, y - 7, simb)
         else:
-            canvas.setFont("Helvetica-Bold", 7)
-            canvas.drawCentredString(x, y - 2.5, nome[:3].upper())
+            canvas.setFont("Helvetica-Bold", 10.5)
+            canvas.drawCentredString(x, y - 3.7, ABREV_SIGNOS[i])
 
-    if idx_casal[0] != idx_casal[1]:
-        pts = []
-        for i in idx_casal:
-            ang = math.radians(75 - i * 30)
-            pts.append((cx + r_in * math.cos(ang), cy + r_in * math.sin(ang)))
-        canvas.setStrokeColor(OURO)
-        canvas.setLineWidth(1)
-        canvas.setStrokeAlpha(0.75)
-        canvas.line(pts[0][0], pts[0][1], pts[1][0], pts[1][1])
-        canvas.setStrokeAlpha(1)
-    for i in set(idx_casal):
-        ang = math.radians(75 - i * 30)
-        canvas.setFillColor(OURO)
-        canvas.circle(cx + r_in * math.cos(ang), cy + r_in * math.sin(ang), 4, stroke=0, fill=1)
-
-    for nome, dy in [(ctx["nome1"], 36), (ctx["nome2"], -52)]:
-        tam = ajustar_fonte(nome, "Times-Bold", 30, 170)
+    for nome, dy in [(ctx["nome1"], 17), (ctx["nome2"], -42)]:
+        tam = ajustar_fonte(nome, "Times-Bold", 30, 175)
         canvas.setFont("Times-Bold", tam)
         canvas.setFillColor(colors.white)
         canvas.drawCentredString(cx, cy + dy, nome)
     canvas.setFillColor(OURO)
-    if FONTE_SIMBOLOS:
-        canvas.setFont(FONTE_SIMBOLOS, 22)
-        canvas.drawCentredString(cx, cy - 9, "♥")
-    else:
-        canvas.setFont("Times-Bold", 24)
-        canvas.drawCentredString(cx, cy - 9, "&")
+    canvas.setFont("Times-Bold", 26)
+    canvas.drawCentredString(cx, cy - 11, "&")
 
-    canvas.setFont("Times-Bold", 50)
+    # Pontuação e frase
+    canvas.setFont("Times-Bold", 58)
     canvas.setFillColor(OURO)
-    canvas.drawCentredString(W / 2, 148, f"{ctx['geral']}%")
-    texto_esp(canvas, W / 2, 128, "AFINIDADE ASTRAL", "Helvetica", 8.5, LILAS_CLARO, 4.5, 'center')
-    ornamento(canvas, W / 2, 112, 60)
+    canvas.drawCentredString(cx, 204, f"{ctx['geral']}%")
+    texto_esp(canvas, cx, 180, "AFINIDADE ASTRAL", "Helvetica", 9, LILAS_CLARO, 4, 'center')
+    ornamento(canvas, cx, 162, 55)
 
-    canvas.setFont("Times-Italic", 16)
+    tam_tag = ajustar_fonte(ctx["tagline"], "Times-Italic", 21, LARGURA)
+    canvas.setFont("Times-Italic", tam_tag)
     canvas.setFillColor(colors.white)
-    canvas.drawCentredString(W / 2, 88, ctx["tagline"])
+    canvas.drawCentredString(cx, 130, ctx["tagline"])
 
-    f_s = FONTE_SIMBOLOS or "Helvetica"
-    texto_misto(canvas, W / 2, 56, [
-        (ctx["simb1"] + " " if FONTE_SIMBOLOS else "", f_s, 13, OURO),
-        (ctx["s1"].upper(), "Helvetica-Bold", 9, LILAS_CLARO),
-        ("     ✦     " if FONTE_SIMBOLOS else "     •     ", f_s if FONTE_SIMBOLOS else "Helvetica", 9, OURO),
-        (ctx["simb2"] + " " if FONTE_SIMBOLOS else "", f_s, 13, OURO),
-        (ctx["s2"].upper(), "Helvetica-Bold", 9, LILAS_CLARO),
+    texto_misto(canvas, cx, 98, [
+        (ctx["s1"].upper(), "Helvetica-Bold", 11, LILAS_CLARO),
+        ("    •    ", "Helvetica", 11, OURO),
+        (ctx["s2"].upper(), "Helvetica-Bold", 11, LILAS_CLARO),
     ])
-    texto_esp(canvas, W / 2, 30, f"GERADO EM {datetime.now().strftime('%d/%m/%Y')}", "Helvetica", 7, LILAS, 2, 'center')
+    texto_esp(canvas, cx, 54, f"GERADO EM {datetime.now().strftime('%d/%m/%Y')}", "Helvetica", 7.5, LILAS, 2.2, 'center')
     canvas.restoreState()
 
 
 def desenhar_pagina(canvas, doc, ctx):
     canvas.saveState()
     canvas.setFillColor(FUNDO_PAGINA)
-    canvas.rect(0, 0, W, H, stroke=0, fill=1)
+    canvas.rect(0, 0, W, HC, stroke=0, fill=1)
 
     canvas.setFillColor(ROXO_PROFUNDO)
-    canvas.rect(0, H - 40, W, 40, stroke=0, fill=1)
+    canvas.rect(0, HC - 28, W, 28, stroke=0, fill=1)
     canvas.setFillColor(OURO)
-    canvas.rect(0, H - 43, W, 3, stroke=0, fill=1)
-    texto_esp(canvas, MARGEM, H - 25, "MAPA ASTRAL DO CASAL", "Helvetica-Bold", 7.5, OURO, 3)
-    canvas.setFont("Times-Italic", 10.5)
+    canvas.rect(0, HC - 30, W, 2, stroke=0, fill=1)
+    texto_esp(canvas, MARGEM, HC - 18, "MAPA ASTRAL DO CASAL", "Helvetica-Bold", 7, OURO, 2.6)
+    canvas.setFont("Times-Italic", 11)
     canvas.setFillColor(LILAS_CLARO)
-    canvas.drawRightString(W - MARGEM, H - 25, f"{ctx['nome1']} & {ctx['nome2']}")
+    canvas.drawRightString(W - MARGEM, HC - 19, f"{ctx['nome1']} & {ctx['nome2']}")
 
     canvas.setStrokeColor(LILAS_CLARO)
     canvas.setLineWidth(0.8)
-    canvas.line(MARGEM, 44, W - MARGEM, 44)
+    canvas.line(MARGEM, 34, W - MARGEM, 34)
     canvas.setFillColor(OURO_ESCURO)
-    if FONTE_SIMBOLOS:
-        canvas.setFont(FONTE_SIMBOLOS, 9)
-        canvas.drawCentredString(W / 2 - 20, 28, "✦")
-        canvas.drawCentredString(W / 2 + 20, 28, "✦")
-    canvas.setFont("Helvetica-Bold", 9)
-    canvas.drawCentredString(W / 2, 28, str(canvas.getPageNumber()))
-    texto_esp(canvas, MARGEM, 28, f"{ctx['s1'].upper()}  &  {ctx['s2'].upper()}", "Helvetica", 7, colors.HexColor('#8B80AA'), 2)
+    canvas.setFont("Helvetica-Bold", 10)
+    canvas.drawCentredString(W / 2, 17, str(canvas.getPageNumber()))
+    texto_esp(canvas, MARGEM, 18, f"{ctx['s1'].upper()} & {ctx['s2'].upper()}", "Helvetica", 6.5, CINZA_SUAVE, 1.6)
     canvas.setFont("Helvetica", 7)
-    canvas.setFillColor(colors.HexColor('#8B80AA'))
-    canvas.drawRightString(W - MARGEM, 28, datetime.now().strftime("%d/%m/%Y"))
+    canvas.setFillColor(CINZA_SUAVE)
+    canvas.drawRightString(W - MARGEM, 18, datetime.now().strftime("%d/%m/%Y"))
     canvas.restoreState()
 
 
@@ -769,73 +922,62 @@ def desenhar_pagina(canvas, doc, ctx):
 
 def criar_estilos():
     base = getSampleStyleSheet()['Normal']
+
     def S(nome, **kw):
         return ParagraphStyle(nome, parent=base, **kw)
+
+    def item(nome, cor):
+        return S(nome, fontName='Helvetica', fontSize=14, leading=21, textColor=TEXTO,
+                 leftIndent=17, bulletIndent=0, bulletFontName='Helvetica-Bold',
+                 bulletFontSize=17, bulletColor=cor, spaceAfter=8)
+
     return {
-        'Corpo': S('Corpo', fontName='Helvetica', fontSize=10, leading=15.5, textColor=TEXTO, alignment=TA_JUSTIFY),
-        'CorpoEscuro': S('CorpoEscuro', fontName='Helvetica', fontSize=10, leading=15.5, textColor=LILAS_CLARO, alignment=TA_JUSTIFY),
-        'TituloCartao': S('TituloCartao', fontName='Helvetica-Bold', fontSize=9.5, leading=13, textColor=ROXO, spaceAfter=5),
-        'TituloCartaoEscuro': S('TituloCartaoEscuro', fontName='Helvetica-Bold', fontSize=9.5, leading=13, textColor=OURO, spaceAfter=5),
-        'TituloSecao': S('TituloSecao', fontName='Times-Bold', fontSize=15, leading=18, textColor=ROXO_PROFUNDO),
-        'SimboloSecao': S('SimboloSecao', fontName='Helvetica', fontSize=15, leading=18),
-        'Item': S('Item', fontName='Helvetica', fontSize=9.8, leading=14.5, textColor=TEXTO, leftIndent=13, firstLineIndent=-13, spaceAfter=4),
-        'Pequeno': S('Pequeno', fontName='Helvetica', fontSize=8.5, leading=12.5, textColor=colors.HexColor('#6B6384')),
-        'PequenoCentro': S('PequenoCentro', fontName='Helvetica-Bold', fontSize=7.5, leading=10, textColor=OURO_ESCURO, alignment=TA_CENTER),
-        'Citacao': S('Citacao', fontName='Times-Italic', fontSize=18, leading=24, textColor=OURO, alignment=TA_CENTER),
-        'Nome': S('Nome', fontName='Times-Bold', fontSize=19, leading=22, textColor=colors.white, alignment=TA_CENTER),
-        'Signo': S('Signo', fontName='Helvetica-Bold', fontSize=8.5, leading=11, textColor=LILAS, alignment=TA_CENTER),
-        'SimboloGrande': S('SimboloGrande', fontName='Helvetica', fontSize=34, leading=40, alignment=TA_CENTER),
-        'InfoCard': S('InfoCard', fontName='Helvetica', fontSize=8.5, leading=13, textColor=LILAS_CLARO, alignment=TA_CENTER),
-        'Celula': S('Celula', fontName='Helvetica', fontSize=9.5, leading=13, textColor=TEXTO),
-        'CelulaNegrito': S('CelulaNegrito', fontName='Helvetica-Bold', fontSize=9.5, leading=13, textColor=ROXO_PROFUNDO),
-        'CelulaCab': S('CelulaCab', fontName='Helvetica-Bold', fontSize=9.5, leading=13, textColor=OURO, alignment=TA_CENTER),
-        'Mensagem': S('Mensagem', fontName='Times-Italic', fontSize=13, leading=19, textColor=ROXO_PROFUNDO, alignment=TA_CENTER),
-        'Aviso': S('Aviso', fontName='Helvetica', fontSize=7.5, leading=10.5, textColor=colors.HexColor('#8B80AA'), alignment=TA_CENTER),
-        'Chip': S('Chip', fontName='Helvetica-Bold', fontSize=9, leading=12, textColor=ROXO, alignment=TA_CENTER),
-        'ChipNome': S('ChipNome', fontName='Helvetica-Bold', fontSize=9.5, leading=12, textColor=OURO, alignment=TA_CENTER),
-        'CorpoPeq': S('CorpoPeq', fontName='Helvetica', fontSize=9, leading=13.5, textColor=LILAS_CLARO),
-        'NomeElem': S('NomeElem', fontName='Helvetica-Bold', fontSize=10.5, leading=13, textColor=ROXO_PROFUNDO),
-        'DescElem': S('DescElem', fontName='Helvetica', fontSize=9, leading=13, textColor=TEXTO),
+        'Corpo': S('Corpo', fontName='Helvetica', fontSize=14, leading=21.5, textColor=TEXTO),
+        'CorpoEscuro': S('CorpoEscuro', fontName='Helvetica', fontSize=14, leading=21.5, textColor=colors.white),
+        'CorpoCentro': S('CorpoCentro', fontName='Helvetica', fontSize=13.5, leading=20.5, textColor=LILAS_CLARO, alignment=TA_CENTER),
+        'Sutil': S('Sutil', fontName='Helvetica', fontSize=12.5, leading=18, textColor=CINZA_SUAVE),
+        'Eyebrow': S('Eyebrow', fontName='Helvetica-Bold', fontSize=10, leading=13, textColor=ROXO, spaceAfter=5),
+        'EyebrowOuro': S('EyebrowOuro', fontName='Helvetica-Bold', fontSize=10, leading=13, textColor=OURO, spaceAfter=5),
+        'EyebrowCentro': S('EyebrowCentro', fontName='Helvetica-Bold', fontSize=10, leading=13, textColor=OURO, alignment=TA_CENTER, spaceAfter=8),
+        'TituloSecao': S('TituloSecao', fontName='Times-Bold', fontSize=21, leading=24, textColor=ROXO_PROFUNDO),
+        'NomeCard': S('NomeCard', fontName='Times-Bold', fontSize=23, leading=26, textColor=ROXO_PROFUNDO),
+        'Titulo3': S('Titulo3', fontName='Helvetica-Bold', fontSize=14.5, leading=19, textColor=ROXO_PROFUNDO),
+        'TituloVerde': S('TituloVerde', fontName='Helvetica-Bold', fontSize=14.5, leading=19, textColor=VERDE, spaceAfter=10),
+        'TituloLaranja': S('TituloLaranja', fontName='Helvetica-Bold', fontSize=14.5, leading=19, textColor=LARANJA, spaceAfter=10),
+        'Termo': S('Termo', fontName='Helvetica-Bold', fontSize=9.5, leading=12, textColor=ROXO, spaceAfter=1),
+        'EtapaTitulo': S('EtapaTitulo', fontName='Helvetica-Bold', fontSize=11, leading=14, textColor=ROXO),
+        'DiaTitulo': S('DiaTitulo', fontName='Helvetica-Bold', fontSize=15, leading=19, textColor=ROXO_PROFUNDO),
+        'NotaRotulo': S('NotaRotulo', fontName='Helvetica-Bold', fontSize=8.5, leading=11, textColor=CINZA_SUAVE, spaceAfter=2),
+        'NotaTexto': S('NotaTexto', fontName='Helvetica', fontSize=13, leading=18, textColor=TEXTO),
+        'Mensagem': S('Mensagem', fontName='Times-Italic', fontSize=21, leading=29, textColor=colors.white, alignment=TA_CENTER),
+        'Aviso': S('Aviso', fontName='Helvetica', fontSize=9, leading=13, textColor=CINZA_SUAVE, alignment=TA_CENTER),
+        'Celula': S('Celula', fontName='Helvetica', fontSize=13, leading=17, textColor=TEXTO),
+        'CelulaNegrito': S('CelulaNegrito', fontName='Helvetica-Bold', fontSize=12.5, leading=16, textColor=CINZA_SUAVE),
+        'CelulaCab': S('CelulaCab', fontName='Helvetica-Bold', fontSize=12, leading=15, textColor=OURO, alignment=TA_CENTER),
+        'ItemOuro': item('ItemOuro', OURO),
+        'ItemVerde': item('ItemVerde', VERDE_CLARO),
+        'ItemLaranja': item('ItemLaranja', LARANJA_CLARO),
     }
 
-def cabecalho_secao(est, simbolo, titulo, largura=LARGURA):
-    marca = Paragraph(sym(simbolo, 15, HEX_OURO), est['SimboloSecao']) if simbolo else Paragraph("", est['SimboloSecao'])
-    t = Table([[marca, Paragraph(escape(titulo).upper(), est['TituloSecao'])]], colWidths=[24, largura - 24])
+
+def cabecalho_secao(est, titulo, largura=LARGURA):
+    t = Table([[Paragraph(escape(titulo).upper(), est['TituloSecao'])]], colWidths=[largura])
     t.setStyle(TableStyle([
-        ('LINEBELOW', (0, 0), (-1, 0), 1.2, OURO),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 0),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('LINEBELOW', (0, 0), (-1, 0), 1.6, OURO),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 9),
     ]))
     return t
 
-def cartao(est, simbolo, titulo, texto, largura=LARGURA, escuro=False):
-    marca = (sym(simbolo, 10, HEX_OURO if escuro else HEX_ROXO) + " &nbsp;") if simbolo else ""
-    est_t = est['TituloCartaoEscuro'] if escuro else est['TituloCartao']
-    est_c = est['CorpoEscuro'] if escuro else est['Corpo']
-    conteudo = [Paragraph(marca + escape(titulo).upper(), est_t), Paragraph(texto, est_c)]
-    t = Table([[conteudo]], colWidths=[largura])
-    if escuro:
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), ROXO_PROFUNDO),
-            ('BOX', (0, 0), (-1, -1), 0.8, OURO),
-            ('LEFTPADDING', (0, 0), (-1, -1), 16), ('RIGHTPADDING', (0, 0), (-1, -1), 16),
-            ('TOPPADDING', (0, 0), (-1, -1), 12), ('BOTTOMPADDING', (0, 0), (-1, -1), 13),
-        ]))
-    else:
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), colors.white),
-            ('BOX', (0, 0), (-1, -1), 0.6, LILAS_CLARO),
-            ('LINEBEFORE', (0, 0), (0, -1), 4, ROXO_VIVO),
-            ('LEFTPADDING', (0, 0), (-1, -1), 16), ('RIGHTPADDING', (0, 0), (-1, -1), 16),
-            ('TOPPADDING', (0, 0), (-1, -1), 12), ('BOTTOMPADDING', (0, 0), (-1, -1), 13),
-        ]))
-    return t
 
-def lista_itens(est, itens, simbolo, cor_hex):
-    marca = sym(simbolo, 8, cor_hex) if simbolo else "•"
-    return [Paragraph(f"{marca}&nbsp; {escape(i)}", est['Item']) for i in itens]
+def secao(est, titulo, cartoes, gap=12):
+    """Título da seção + cartões. O título sempre fica junto do primeiro cartão."""
+    saida = [KeepTogether([cabecalho_secao(est, titulo), Spacer(1, 14), cartoes[0]])]
+    for c in cartoes[1:]:
+        saida += [Spacer(1, gap), c]
+    saida.append(Spacer(1, 30))
+    return saida
+
 
 def abreviar_nome(nome, limite=16):
     nome = " ".join(str(nome).split()) or "Pessoa"
@@ -845,12 +987,10 @@ def abreviar_nome(nome, limite=16):
 
 def gerar_pdf_mapa_por_signos(nome1, signo1, nome2, signo2, email):
     s1, s2 = signo1, signo2
-    simb1 = dict(ZODIACO).get(s1, "♈")
-    simb2 = dict(ZODIACO).get(s2, "♉")
     d1, d2 = SIGNOS[s1], SIGNOS[s2]
     analise = obter_analise_exclusiva(s1, s2)
     geral, scores = calcular_scores(s1, s2)
-    
+
     nome1_original, nome2_original = nome1, nome2
     nome1, nome2 = abreviar_nome(nome1), abreviar_nome(nome2)
     n1, n2 = escape(nome1), escape(nome2)
@@ -859,329 +999,181 @@ def gerar_pdf_mapa_por_signos(nome1, signo1, nome2, signo2, email):
     filename = f"Mapa_Astral_Casal_{nome_seguro}.pdf"
     filepath = os.path.join(PDF_DIR, filename)
 
-    ctx = dict(nome1=nome1, nome2=nome2, s1=s1, s2=s2, simb1=simb1, simb2=simb2,
-               geral=geral, tagline=analise["tagline"])
+    ctx = dict(nome1=nome1, nome2=nome2, s1=s1, s2=s2, geral=geral, tagline=analise["tagline"])
 
     doc = BaseDocTemplate(
-        filepath, pagesize=letter,
+        filepath, pagesize=(W, H),
         title="Mapa Astral do Casal", author="Mapa Astral do Casal",
-        leftMargin=MARGEM, rightMargin=MARGEM, topMargin=62, bottomMargin=58,
+        leftMargin=MARGEM, rightMargin=MARGEM, topMargin=46, bottomMargin=46,
     )
-    frame_capa = Frame(MARGEM, 40, LARGURA, 60, id='capa', leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
-    frame_cont = Frame(MARGEM, 58, LARGURA, H - 58 - 64, id='cont', leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
+    frame_capa = Frame(MARGEM, 40, LARGURA, 20, id='capa', leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
+    frame_cont = Frame(MARGEM, 46, LARGURA, HC - 46 - 46, id='cont', leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
     doc.addPageTemplates([
-        PageTemplate(id='capa', frames=[frame_capa], onPage=lambda c, d: desenhar_capa(c, d, ctx)),
-        PageTemplate(id='conteudo', frames=[frame_cont], onPage=lambda c, d: desenhar_pagina(c, d, ctx)),
+        PageTemplate(id='capa', frames=[frame_capa], pagesize=(W, H), onPage=lambda c, d: desenhar_capa(c, d, ctx)),
+        PageTemplate(id='conteudo', frames=[frame_cont], pagesize=(W, HC), onPage=lambda c, d: desenhar_pagina(c, d, ctx)),
     ])
 
     est = criar_estilos()
+    CW = LARGURA - 32  # largura útil dentro de um cartão
+
+    def caixa(itens, **kw):
+        return CaixaArredondada(itens, LARGURA, **kw)
+
+    def P(txt, estilo):
+        return Paragraph(txt, est[estilo])
+
     story = [Spacer(1, 1), NextPageTemplate('conteudo'), PageBreak()]
-    GAP = 14
-    METADE = (LARGURA - 12) / 2
 
-    # PÁGINA 2
-    def cartao_pessoa(nome, signo, simb, d):
-        itens = []
-        if FONTE_SIMBOLOS:
-            itens.append(Paragraph(sym(simb, 36, HEX_OURO), est['SimboloGrande']))
-        itens.append(Paragraph(nome, est['Nome']))
-        itens.append(Paragraph(signo.upper(), est['Signo']))
-        itens.append(Spacer(1, 8))
-        info = (f"<font color='{HEX_LILAS}'>ELEMENTO</font> &nbsp;<b>{d['elem']}</b><br/>"
-                f"<font color='{HEX_LILAS}'>MODALIDADE</font> &nbsp;<b>{d['mod']}</b><br/>"
-                f"<font color='{HEX_LILAS}'>REGENTE</font> &nbsp;{sym(d['psimb'], 9, HEX_OURO)} <b>{d['planeta']}</b>")
-        itens.append(Paragraph(info, est['InfoCard']))
-        return itens
+    # ---------- Compatibilidade geral ----------
+    def cartao_signo(nome, signo, d):
+        return caixa([
+            P(nome.upper(), 'Eyebrow'),
+            P(signo, 'NomeCard'),
+            Spacer(1, 4),
+            P(f"{d['elem']} · {d['mod']} · Regente {d['planeta']}", 'Sutil'),
+        ])
+    story += secao(est, "Compatibilidade geral", [cartao_signo(n1, s1, d1), cartao_signo(n2, s2, d2)])
 
-    gauge = [Medidor(geral), Spacer(1, 3), Paragraph("COMPATIBILIDADE GERAL", est['PequenoCentro'])]
-    casal = Table([[cartao_pessoa(n1, s1, simb1, d1), gauge, cartao_pessoa(n2, s2, simb2, d2)]],
-                  colWidths=[172, 172, 172])
-    casal.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (0, 0), ROXO_PROFUNDO),
-        ('BACKGROUND', (2, 0), (2, 0), ROXO_PROFUNDO),
-        ('BACKGROUND', (1, 0), (1, 0), LILAS_FUNDO),
-        ('BOX', (0, 0), (-1, -1), 1, OURO),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('ALIGN', (1, 0), (1, 0), 'CENTER'),
-        ('TOPPADDING', (0, 0), (-1, -1), 12), ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
-        ('LEFTPADDING', (0, 0), (-1, -1), 8), ('RIGHTPADDING', (0, 0), (-1, -1), 8),
-    ]))
-    story.append(casal)
-    story.append(Spacer(1, GAP))
-
-    frase = Table([[Paragraph(f"{sym('✦', 12, HEX_LILAS)} &nbsp;{escape(analise['tagline'])}&nbsp; {sym('✦', 12, HEX_LILAS)}", est['Citacao'])]],
-                  colWidths=[LARGURA])
-    frase.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), ROXO_PROFUNDO),
-        ('LINEABOVE', (0, 0), (-1, 0), 2, OURO), ('LINEBELOW', (0, 0), (-1, 0), 2, OURO),
-        ('TOPPADDING', (0, 0), (-1, -1), 12), ('BOTTOMPADDING', (0, 0), (-1, -1), 14),
-    ]))
-    story.append(frase)
-    story.append(Spacer(1, 14))
-
-    story.append(cabecalho_secao(est, "♥", "Termômetro da Relação"))
-    story.append(Spacer(1, 12))
-    for rotulo, valor in zip(CATEGORIAS, scores):
-        story.append(BarraCompat(rotulo, valor, LARGURA))
-        story.append(Spacer(1, 2))
-
+    # ---------- Termômetro ----------
     i_max, i_min = scores.index(max(scores)), scores.index(min(scores))
-    destaque = (f"<b>Maior destaque:</b> {escape(CATEGORIAS[i_max])} ({scores[i_max]}%) &nbsp;&nbsp;{sym('✦', 8, HEX_OURO)}&nbsp;&nbsp; "
-                f"<b>Merece mais carinho:</b> {escape(CATEGORIAS[i_min])} ({scores[i_min]}%)")
-    story.append(Spacer(1, 2))
-    box = Table([[Paragraph(destaque, est['Celula'])]], colWidths=[LARGURA])
-    box.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), CREME), ('BOX', (0, 0), (-1, -1), 0.6, OURO),
-        ('LEFTPADDING', (0, 0), (-1, -1), 14), ('RIGHTPADDING', (0, 0), (-1, -1), 14),
-        ('TOPPADDING', (0, 0), (-1, -1), 9), ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
-    ]))
-    story.append(box)
-    story.append(Spacer(1, 14))
+    barras = []
+    for i, (rotulo, valor) in enumerate(zip(CATEGORIAS, scores)):
+        barras.append(BarraCompat(rotulo, valor, CW, destaque=(i == i_max)))
+        barras.append(Spacer(1, 6))
+    nota_alta = CaixaArredondada(
+        [P("MAIOR DESTAQUE", 'NotaRotulo'), P(f"{escape(CATEGORIAS[i_max])} ({scores[i_max]}%)", 'NotaTexto')],
+        CW, fundo=CREME, borda=OURO_BORDA, raio=10, pad_x=14, pad_y=11)
+    nota_baixa = CaixaArredondada(
+        [P("MERECE MAIS CARINHO", 'NotaRotulo'), P(f"{escape(CATEGORIAS[i_min])} ({scores[i_min]}%)", 'NotaTexto')],
+        CW, fundo=LILAS_FUNDO, borda=LILAS_CLARO, raio=10, pad_x=14, pad_y=11)
+    story += secao(est, "Termômetro da relação",
+                   [caixa(barras + [Spacer(1, 8), nota_alta, Spacer(1, 10), nota_baixa])])
 
-    story.append(cabecalho_secao(est, "✦", "Palavras-Chave do Casal"))
-    story.append(Spacer(1, 10))
+    # ---------- Palavras-chave ----------
+    def bloco_chips(nome, d):
+        return [P(nome, 'NomeCard'), Spacer(1, 8), Pilulas(d["kw"].split(" · "), CW)]
+    story += secao(est, "Palavras-chave do casal",
+                   [caixa(bloco_chips(n1, d1) + [Spacer(1, 18)] + bloco_chips(n2, d2))])
 
-    def linha_chips(nome, d):
-        return [Paragraph(nome, est['ChipNome'])] + [Paragraph(escape(k), est['Chip']) for k in d["kw"].split(" · ")]
+    # ---------- Dinâmica ----------
+    story += secao(est, "A dinâmica energética do casal", [
+        caixa([P("VISÃO GERAL DA CONEXÃO", 'Eyebrow'), P(analise["dinamica"], 'Corpo')])])
 
-    tc = Table([linha_chips(n1, d1), linha_chips(n2, d2)], colWidths=[116, 133, 133, 134])
-    tc.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (0, -1), ROXO_PROFUNDO),
-        ('BACKGROUND', (1, 0), (-1, -1), LILAS_FUNDO),
-        ('INNERGRID', (1, 0), (-1, -1), 4, FUNDO_PAGINA),
-        ('LINEAFTER', (0, 0), (0, -1), 4, FUNDO_PAGINA),
-        ('LINEBELOW', (0, 0), (0, 0), 4, FUNDO_PAGINA),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 9), ('BOTTOMPADDING', (0, 0), (-1, -1), 9),
-    ]))
-    story.append(tc)
-    story.append(PageBreak())
-
-    # PÁGINA 3
-    story.append(cabecalho_secao(est, "☽", "A Dinâmica Energética do Casal"))
-    story.append(Spacer(1, 10))
-    story.append(cartao(est, "✦", "Visão geral da conexão", analise["dinamica"]))
-    story.append(Spacer(1, 18))
-
+    # ---------- Elementos ----------
     def cartao_elemento(elem, dono):
-        conteudo = [Paragraph(f"{elem} &nbsp;<font color='#8B80AA' size='8'>· {escape(dono)}</font>", est['NomeElem']),
-                    Spacer(1, 2), Paragraph(ELEMENTOS[elem], est['DescElem'])]
-        t = Table([[IconeElemento(elem), conteudo]], colWidths=[46, METADE - 46])
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), colors.white), ('BOX', (0, 0), (-1, -1), 0.6, LILAS_CLARO),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('LEFTPADDING', (0, 0), (0, 0), 9), ('LEFTPADDING', (1, 0), (1, 0), 4), ('RIGHTPADDING', (1, 0), (1, 0), 10),
-            ('TOPPADDING', (0, 0), (-1, -1), 10), ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
-        ]))
-        return t
-
-    def duas_colunas(a, b):
-        t = Table([[a, "", b]], colWidths=[METADE, 12, METADE])
+        texto = [P(f"{elem} &nbsp;<font color='#6B6384' size='11'>· {dono}</font>", 'Titulo3'),
+                 Spacer(1, 3), P(ELEMENTOS[elem], 'Corpo')]
+        t = Table([[IconeElemento(elem), texto]], colWidths=[60, CW - 60])
         t.setStyle(TableStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
             ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
         ]))
-        return t
+        return caixa([t])
+    story += secao(est, "Os elementos de vocês",
+                   [cartao_elemento(d1["elem"], n1), cartao_elemento(d2["elem"], n2)])
 
-    story.append(cabecalho_secao(est, "▲", "Os Elementos de Vocês"))
-    story.append(Spacer(1, 10))
-    story.append(duas_colunas(cartao_elemento(d1["elem"], nome1), cartao_elemento(d2["elem"], nome2)))
-    story.append(Spacer(1, 18))
+    # ---------- Planetas ----------
+    def cartao_planeta(planeta, signo):
+        return caixa([
+            P(f"{planeta} &nbsp;<font color='#6B6384' size='11'>· regente de {signo}</font>", 'Titulo3'),
+            Spacer(1, 4), P(PLANETAS[planeta], 'Corpo'),
+        ], fundo=LILAS_FUNDO)
+    story += secao(est, "Os planetas que governam o amor de vocês",
+                   [cartao_planeta(d1["planeta"], s1), cartao_planeta(d2["planeta"], s2)])
 
-    def cartao_planeta(planeta, psimb, signo, dono):
-        titulo = Paragraph(f"{sym(psimb, 13, HEX_OURO)} &nbsp;{planeta} &nbsp;<font color='#8B80AA' size='8'>· regente de {signo}</font>", est['NomeElem'])
-        conteudo = [titulo, Spacer(1, 3), Paragraph(PLANETAS[planeta], est['DescElem'])]
-        t = Table([[conteudo]], colWidths=[METADE])
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), LILAS_FUNDO), ('BOX', (0, 0), (-1, -1), 0.6, LILAS_CLARO),
-            ('LEFTPADDING', (0, 0), (-1, -1), 12), ('RIGHTPADDING', (0, 0), (-1, -1), 12),
-            ('TOPPADDING', (0, 0), (-1, -1), 10), ('BOTTOMPADDING', (0, 0), (-1, -1), 11),
-        ]))
-        return t
+    # ---------- Ritmo ----------
+    story += secao(est, "O ritmo da relação", [
+        caixa([P(f"{d1['mod']} + {d2['mod']}".upper(), 'EyebrowOuro'), P(analise["ritmo"], 'CorpoEscuro')],
+              fundo=ROXO_PROFUNDO, borda=OURO, espessura=1.6)])
 
-    story.append(cabecalho_secao(est, "♃", "Os Planetas que Governam o Amor de Vocês"))
-    story.append(Spacer(1, 10))
-    story.append(duas_colunas(cartao_planeta(d1["planeta"], d1["psimb"], s1, nome1),
-                              cartao_planeta(d2["planeta"], d2["psimb"], s2, nome2)))
-    story.append(Spacer(1, 18))
+    # ---------- Programas ----------
+    itens_prog = [Paragraph(escape(i), est['ItemOuro'], bulletText='•') for i in analise["ideias"]]
+    story += secao(est, "Programas ideais para o casal", [caixa(itens_prog, fundo=LILAS_FUNDO, pad_y=14)])
 
-    story.append(cabecalho_secao(est, "♄", "O Ritmo da Relação"))
-    story.append(Spacer(1, 10))
-    story.append(cartao(est, "✦", f"{d1['mod']} + {d2['mod']}", analise["ritmo"], escuro=True))
-    story.append(Spacer(1, 18))
-    story.append(cabecalho_secao(est, "✦", "Programas Ideais para o Casal"))
-    story.append(Spacer(1, 10))
-    ideias = Table([[lista_itens(est, analise["ideias"], "✦", HEX_OURO)]], colWidths=[LARGURA])
-    ideias.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), LILAS_FUNDO), ('BOX', (0, 0), (-1, -1), 0.6, LILAS_CLARO),
-        ('LEFTPADDING', (0, 0), (-1, -1), 16), ('RIGHTPADDING', (0, 0), (-1, -1), 16),
-        ('TOPPADDING', (0, 0), (-1, -1), 12), ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-    ]))
-    story.append(ideias)
-    story.append(Spacer(1, 22))
-    story.append(PageBreak())
+    # ---------- Amor na prática ----------
+    story += secao(est, "O amor na prática", [
+        caixa([P("AMOR & ROMANCE", 'Eyebrow'), P(analise["amor"], 'Corpo')]),
+        caixa([P("COMUNICAÇÃO & ENTENDIMENTO", 'Eyebrow'), P(analise["comunicacao"], 'Corpo')]),
+        caixa([P("QUÍMICA & INTIMIDADE", 'Eyebrow'), P(analise["intimidade"], 'Corpo')]),
+    ])
 
-    # PÁGINA 4
-    story.append(cabecalho_secao(est, "♥", "O Amor na Prática"))
-    story.append(Spacer(1, 10))
-    story.append(cartao(est, "♥", "Amor & Romance", analise["amor"]))
-    story.append(Spacer(1, 12))
-    story.append(cartao(est, "☿", "Comunicação & Entendimento", analise["comunicacao"]))
-    story.append(Spacer(1, 12))
-    story.append(cartao(est, "♀", "Química & Intimidade", analise["intimidade"]))
-    story.append(Spacer(1, 22))
+    # ---------- Pontos fortes e de atenção ----------
+    fortes = [P("Pontos fortes", 'TituloVerde')] + \
+             [Paragraph(escape(i), est['ItemVerde'], bulletText='•') for i in analise["fortes"]]
+    atencao = [P("Pontos de atenção", 'TituloLaranja')] + \
+              [Paragraph(escape(i), est['ItemLaranja'], bulletText='•') for i in analise["atritos"]]
+    story += secao(est, "Pontos fortes e pontos de atenção", [caixa(fortes), caixa(atencao)])
 
-    story.append(cabecalho_secao(est, "✦", "Pontos Fortes e Pontos de Atenção"))
-    story.append(Spacer(1, 10))
+    # ---------- Jornada ----------
+    etapas = [(n, fase, txt) for n, (fase, txt) in
+              enumerate(zip(["Início", "Consolidação", "Longo prazo"], analise["jornada"]), 1)]
+    story += secao(est, "A jornada do casal", [caixa([Jornada(etapas, CW, est)])])
 
-    def coluna_lista(titulo, simbolo, cor_hex, itens):
-        return [Paragraph(f"{sym(simbolo, 9, cor_hex)}&nbsp; {escape(titulo).upper()}", est['TituloCartao']),
-                Spacer(1, 3)] + lista_itens(est, itens, simbolo, cor_hex)
+    # ---------- Jeito de amar ----------
+    def perfil_amor(nome, signo, d):
+        def par(termo, texto):
+            return [P(termo.upper(), 'Termo'), P(cap1(texto), 'Corpo'), Spacer(1, 10)]
+        return caixa([
+            P(nome.upper(), 'Eyebrow'), P(signo, 'NomeCard'), Spacer(1, 8),
+            P(d["perfil"], 'Corpo'), Spacer(1, 12),
+        ] + par("Linguagem do amor", d["ling"]) + par("Precisa de", d["precisa"]) +
+            par("Ponto de atenção", d["cuidado"]) + [Spacer(1, 2), Pilulas(d["kw"].split(" · "), CW)])
+    story += secao(est, "O jeito de amar de cada um", [perfil_amor(n1, s1, d1), perfil_amor(n2, s2, d2)])
 
-    forte = coluna_lista("Pontos fortes", "✦", HEX_ROXO, analise["fortes"])
-    atenc = coluna_lista("Pontos de atenção", "◆", HEX_OURO, analise["atritos"])
-    tab = Table([[forte, "", atenc]], colWidths=[METADE, 12, METADE])
-    tab.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (0, 0), LILAS_FUNDO), ('BOX', (0, 0), (0, 0), 0.6, LILAS_CLARO),
-        ('BACKGROUND', (2, 0), (2, 0), CREME), ('BOX', (2, 0), (2, 0), 0.6, colors.HexColor('#EADBA8')),
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('LEFTPADDING', (0, 0), (0, 0), 14), ('RIGHTPADDING', (0, 0), (0, 0), 12),
-        ('LEFTPADDING', (2, 0), (2, 0), 14), ('RIGHTPADDING', (2, 0), (2, 0), 12),
-        ('LEFTPADDING', (1, 0), (1, 0), 0), ('RIGHTPADDING', (1, 0), (1, 0), 0),
-        ('TOPPADDING', (0, 0), (-1, -1), 12), ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
-    ]))
-    story.append(tab)
-    story.append(Spacer(1, 22))
+    # ---------- Como amar melhor ----------
+    def como_amar(nome, outro, d_outro, d_proprio):
+        return caixa([
+            P(f"PARA {nome.upper()}", 'Eyebrow'),
+            P(f"Para conquistar o coração de {outro}, invista em {d_outro['ling']}", 'Corpo'),
+            Spacer(1, 10),
+            P(f"Seu ponto sensível: {d_proprio['cuidado']}", 'Sutil'),
+        ], fundo=LILAS_FUNDO)
+    story += secao(est, "Como amar melhor",
+                   [como_amar(n1, n2, d2, d1), como_amar(n2, n1, d1, d2)])
 
-    story.append(cabecalho_secao(est, "☉", "A Jornada do Casal"))
-    story.append(Spacer(1, 10))
-    L3 = (LARGURA - 24) / 3
-    colunas_fase = []
-    for n, (fase, txt) in enumerate(zip(["Início", "Consolidação", "Longo prazo"], analise["jornada"]), 1):
-        colunas_fase.append([Paragraph(f"{n:02d} &nbsp;·&nbsp; {fase.upper()}", est['TituloCartaoEscuro']),
-                             Paragraph(escape(txt), est['CorpoPeq'])])
-    tj = Table([[colunas_fase[0], "", colunas_fase[1], "", colunas_fase[2]]], colWidths=[L3, 12, L3, 12, L3])
-    tj.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (0, 0), ROXO_PROFUNDO), ('BOX', (0, 0), (0, 0), 0.8, OURO),
-        ('BACKGROUND', (2, 0), (2, 0), ROXO_PROFUNDO), ('BOX', (2, 0), (2, 0), 0.8, OURO),
-        ('BACKGROUND', (4, 0), (4, 0), ROXO_PROFUNDO), ('BOX', (4, 0), (4, 0), 0.8, OURO),
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 12), ('RIGHTPADDING', (0, 0), (-1, -1), 12),
-        ('LEFTPADDING', (1, 0), (1, 0), 0), ('RIGHTPADDING', (1, 0), (1, 0), 0),
-        ('LEFTPADDING', (3, 0), (3, 0), 0), ('RIGHTPADDING', (3, 0), (3, 0), 0),
-        ('TOPPADDING', (0, 0), (-1, -1), 12), ('BOTTOMPADDING', (0, 0), (-1, -1), 13),
-    ]))
-    story.append(tj)
-    story.append(PageBreak())
-
-    # PÁGINA 5
-    story.append(cabecalho_secao(est, "☉", "O Jeito de Amar de Cada Um"))
-    story.append(Spacer(1, 10))
-
-    def perfil_amor(nome, signo, simb, d):
-        esq = []
-        if FONTE_SIMBOLOS:
-            esq.append(Paragraph(sym(simb, 30, HEX_OURO), est['SimboloGrande']))
-        esq.append(Paragraph(f"<font size='14'>{nome}</font>", est['Nome']))
-        esq.append(Paragraph(signo.upper(), est['Signo']))
-        dir_ = [
-            Paragraph(d["perfil"], est['Corpo']),
-            Spacer(1, 5),
-            Paragraph(f"<b><font color='{HEX_ROXO}'>Linguagem do amor:</font></b> {d['ling']}", est['Celula']),
-            Paragraph(f"<b><font color='{HEX_ROXO}'>Precisa de:</font></b> {d['precisa']}", est['Celula']),
-            Paragraph(f"<b><font color='{HEX_ROXO}'>Ponto de atenção:</font></b> {d['cuidado']}", est['Celula']),
-            Spacer(1, 3),
-            Paragraph(f"{sym('✦', 8, HEX_OURO)} <font color='#8B80AA'>{d['kw']}</font>", est['Pequeno']),
-        ]
-        t = Table([[esq, dir_]], colWidths=[118, LARGURA - 118])
-        t.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (0, 0), ROXO_PROFUNDO), ('BACKGROUND', (1, 0), (1, 0), colors.white),
-            ('BOX', (0, 0), (-1, -1), 0.8, OURO),
-            ('VALIGN', (0, 0), (0, 0), 'MIDDLE'), ('VALIGN', (1, 0), (1, 0), 'TOP'),
-            ('LEFTPADDING', (0, 0), (0, 0), 6), ('RIGHTPADDING', (0, 0), (0, 0), 6),
-            ('LEFTPADDING', (1, 0), (1, 0), 16), ('RIGHTPADDING', (1, 0), (1, 0), 16),
-            ('TOPPADDING', (0, 0), (-1, -1), 13), ('BOTTOMPADDING', (0, 0), (-1, -1), 13),
-        ]))
-        return t
-
-    story.append(perfil_amor(n1, s1, simb1, d1))
-    story.append(Spacer(1, 12))
-    story.append(perfil_amor(n2, s2, simb2, d2))
-    story.append(Spacer(1, 22))
-
-    story.append(cabecalho_secao(est, "♥", "Como Amar Melhor"))
-    story.append(Spacer(1, 10))
-    story.append(duas_colunas(
-        cartao(est, "", f"Para {nome1}",
-               f"Para conquistar o coração de {n2}, invista em <b>{d2['ling']}</b><br/><br/>"
-               f"<font color='#8B80AA'>Seu ponto sensível:</font> {d1['cuidado']}", METADE),
-        cartao(est, "", f"Para {nome2}",
-               f"Para conquistar o coração de {n1}, invista em <b>{d1['ling']}</b><br/><br/>"
-               f"<font color='#8B80AA'>Seu ponto sensível:</font> {d2['cuidado']}", METADE),
-    ))
-    story.append(Spacer(1, 14))
-    story.append(cabecalho_secao(est, "☉", "Cores, Pedras e Números da Sorte"))
-    story.append(Spacer(1, 10))
+    # ---------- Cores, pedras e números ----------
     linhas = [
         [Paragraph("", est['Celula']), Paragraph(n1, est['CelulaCab']), Paragraph(n2, est['CelulaCab'])],
-        [Paragraph("Cor da sorte", est['CelulaNegrito']), Paragraph(d1["cor"], est['Celula']), Paragraph(d2["cor"], est['Celula'])],
-        [Paragraph("Pedra protetora", est['CelulaNegrito']), Paragraph(d1["pedra"], est['Celula']), Paragraph(d2["pedra"], est['Celula'])],
-        [Paragraph("Dia de energia", est['CelulaNegrito']), Paragraph(d1["dia"], est['Celula']), Paragraph(d2["dia"], est['Celula'])],
-        [Paragraph("Números", est['CelulaNegrito']), Paragraph(d1["nums"], est['Celula']), Paragraph(d2["nums"], est['Celula'])],
+        [P("Cor da sorte", 'CelulaNegrito'), P(d1["cor"], 'Celula'), P(d2["cor"], 'Celula')],
+        [P("Pedra protetora", 'CelulaNegrito'), P(d1["pedra"], 'Celula'), P(d2["pedra"], 'Celula')],
+        [P("Dia de energia", 'CelulaNegrito'), P(d1["dia"], 'Celula'), P(d2["dia"], 'Celula')],
+        [P("Números", 'CelulaNegrito'), P(d1["nums"], 'Celula'), P(d2["nums"], 'Celula')],
     ]
-    tq = Table(linhas, colWidths=[132, (LARGURA - 132) / 2, (LARGURA - 132) / 2])
+    tq = Table(linhas, colWidths=[110, (LARGURA - 110) / 2, (LARGURA - 110) / 2])
     tq.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), ROXO_PROFUNDO),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, LILAS_FUNDO]),
-        ('BOX', (0, 0), (-1, -1), 0.8, OURO),
-        ('LINEBELOW', (0, 1), (-1, -2), 0.4, LILAS_CLARO),
+        ('BOX', (0, 0), (-1, -1), 1, OURO),
+        ('LINEBELOW', (0, 1), (-1, -2), 0.5, LILAS_CLARO),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 12),
-        ('TOPPADDING', (0, 0), (-1, -1), 6), ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('LEFTPADDING', (0, 0), (-1, -1), 10), ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), 10), ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
     ]))
-    story.append(tq)
-    story.append(PageBreak())
+    story += secao(est, "Cores, pedras e números da sorte", [tq])
 
-    # PÁGINA 6
-    story.append(cabecalho_secao(est, "☽", "Ritual de 7 Dias para Fortalecer o Vínculo"))
-    story.append(Spacer(1, 10))
-    linhas_ritual = [[Paragraph(f"DIA {i}", est['CelulaCab']),
-                      Paragraph(f"<b>{t}:</b> {x}", est['Celula'])] for i, (t, x) in enumerate(RITUAL, 1)]
-    tr = Table(linhas_ritual, colWidths=[64, LARGURA - 64])
-    tr.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (0, -1), ROXO_PROFUNDO),
-        ('ROWBACKGROUNDS', (1, 0), (1, -1), [colors.white, LILAS_FUNDO]),
-        ('BOX', (0, 0), (-1, -1), 0.8, OURO),
-        ('LINEBELOW', (0, 0), (-1, -2), 0.4, LILAS_CLARO),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('LEFTPADDING', (1, 0), (1, -1), 14), ('RIGHTPADDING', (1, 0), (1, -1), 12),
-        ('TOPPADDING', (0, 0), (-1, -1), 8), ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-    ]))
-    story.append(tr)
-    story.append(Spacer(1, 22))
+    # ---------- Ritual ----------
+    dias = [CartaoDia(i, t, cap1(x), LARGURA, est) for i, (t, x) in enumerate(RITUAL, 1)]
+    story += secao(est, "Ritual de 7 dias para fortalecer o vínculo", dias, gap=10)
 
-    story.append(cabecalho_secao(est, "☽", "Guia de Harmonização & Veredito"))
-    story.append(Spacer(1, 10))
-    story.append(cartao(est, "✦", "O conselho das estrelas para vocês", f"<i>{analise['conselho']}</i>", escuro=True))
-    story.append(Spacer(1, 22))
-
-    final = Table([[[
-        Paragraph(sym("✦ &nbsp;✦ &nbsp;✦", 10, HEX_OURO), est['SimboloGrande']),
-        Paragraph("Que este mapa seja um convite para se conhecerem ainda mais. "
-                  "As estrelas apontam tendências, mas a história de vocês é escrita todos os dias, "
-                  "com escolhas, carinho e presença.", est['Mensagem']),
-    ]]], colWidths=[LARGURA])
-    final.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), CREME), ('BOX', (0, 0), (-1, -1), 0.8, OURO),
-        ('LEFTPADDING', (0, 0), (-1, -1), 36), ('RIGHTPADDING', (0, 0), (-1, -1), 36),
-        ('TOPPADDING', (0, 0), (-1, -1), 6), ('BOTTOMPADDING', (0, 0), (-1, -1), 18),
-    ]))
-    story.append(KeepTogether([final, Spacer(1, 10),
-                               Paragraph("Conteúdo de caráter simbólico e de entretenimento, baseado nos signos solares do casal.", est['Aviso'])]))
+    # ---------- Veredito ----------
+    veredito = caixa([
+        P("O CONSELHO DAS ESTRELAS PARA VOCÊS", 'EyebrowCentro'),
+        P(analise["conselho"], 'Mensagem'),
+        Spacer(1, 16),
+        P("Que este mapa seja um convite para se conhecerem ainda mais. "
+          "As estrelas apontam tendências, mas a história de vocês é escrita todos os dias, "
+          "com escolhas, carinho e presença.", 'CorpoCentro'),
+    ], fundo=ROXO_PROFUNDO, borda=OURO, espessura=1.2, pad_x=20, pad_y=24)
+    story += [KeepTogether([
+        cabecalho_secao(est, "Guia de harmonização & veredito"), Spacer(1, 14), veredito,
+        Spacer(1, 22),
+        P("Conteúdo de caráter simbólico e de entretenimento, baseado nos signos solares do casal.", 'Aviso'),
+    ])]
 
     doc.build(story)
     return filename
+
 
 
 # ==========================================
