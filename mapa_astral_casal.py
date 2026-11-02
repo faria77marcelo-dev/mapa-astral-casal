@@ -9,7 +9,7 @@ from datetime import datetime
 from xml.sax.saxutils import escape
 
 import requests
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template_string
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
 from reportlab.lib.pagesizes import letter
@@ -1223,11 +1223,11 @@ def gerar_pdf_sinastria(nome1, dia1, mes1, nome2, dia2, mes2):
 
 
 # ==========================================
-# 6. ROTA DO WEBHOOK E TESTE AUTOMÁTICO
+# 6. ROTA DO WEBHOOK E FORMULÁRIO WEB
 # ==========================================
 
-@app.route('/webhook-venda', methods=['POST'])
-def webhook_venda():
+@app.route('/webhook', methods=['POST'])
+def webhook_kiwify():
     dados = request.json
     if not dados:
         return jsonify({"erro": "Nenhum dado recebido"}), 400
@@ -1238,40 +1238,95 @@ def webhook_venda():
 
     nome2 = dados.get("nome2", "Pessoa 2")
     dia2 = int(dados.get("dia2", 1))
-    mes2 = int(dados.get("mes2", 1))
+    mes2 = int(dados.get("mes2", 2))
+    
+    email_comprador = dados.get("customer", {}).get("email") or dados.get("email", "cliente@email.com")
 
-    caminho_pdf = gerar_pdf_sinastria(nome1, dia1, mes1, nome2, dia2, mes2)
+    caminho_pdf = gerard_pdf_sinastria(nome1, dia1, mes1, nome2, dia2, mes2) if 'gerard_pdf_sinastria' in globals() else gerar_pdf_sinastria(nome1, dia1, mes1, nome2, dia2, mes2)
 
-    print(f"🔥 Venda processada e novo PDF com layout premium gerado para: {nome1} e {nome2}")
+    print(f"🔥 Webhook da Kiwify recebido! PDF gerado para {nome1} e {nome2} (Comprador: {email_comprador})")
 
     return jsonify({
         "status": "sucesso",
-        "mensagem": "PDF com novo design gerado com sucesso!",
+        "mensagem": "Webhook processado e PDF gerado com sucesso!",
+        "email": email_comprador,
         "ficheiro": caminho_pdf
     }), 200
 
 
-def iniciar_servidor():
-    app.run(host='127.0.0.1', port=5000, debug=False, use_reloader=False)
+HTML_FORMULARIO = """
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <title>Mapa Astral do Casal - Insira os Dados</title>
+    <style>
+        body { background-color: #150726; color: #FFF8E6; font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { background: #2E1065; padding: 30px; border-radius: 12px; border: 1px solid #D4AF37; width: 350px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        h2 { color: #D4AF37; text-align: center; margin-bottom: 20px; }
+        label { display: block; margin-top: 12px; color: #A78BFA; font-size: 14px; }
+        input { width: 100%; padding: 10px; margin-top: 5px; border-radius: 6px; border: 1px solid #A78BFA; background: #150726; color: white; box-sizing: border-box; }
+        button { width: 100%; background: #7C3AED; color: white; border: none; padding: 12px; border-radius: 6px; margin-top: 20px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        button:hover { background: #D4AF37; color: #150726; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>Mapa Astral do Casal</h2>
+        <form action="/gerar-mapa" method="POST">
+            <input type="hidden" name="email" value="{{ email }}">
+            
+            <label>Nome da Pessoa 1:</label>
+            <input type="text" name="nome1" required placeholder="Ex: Lucas">
+            
+            <label>Dia e Mês de Nascimento (Pessoa 1):</label>
+            <div style="display: flex; gap: 10px;">
+                <input type="number" name="dia1" placeholder="Dia" min="1" max="31" required style="width: 50%;">
+                <input type="number" name="mes1" placeholder="Mês" min="1" max="12" required style="width: 50%;">
+            </div>
+
+            <label>Nome da Pessoa 2:</label>
+            <input type="text" name="nome2" required placeholder="Ex: Fernanda">
+            
+            <label>Dia e Mês de Nascimento (Pessoa 2):</label>
+            <div style="display: flex; gap: 10px;">
+                <input type="number" name="dia2" placeholder="Dia" min="1" max="31" required style="width: 50%;">
+                <input type="number" name="mes2" placeholder="Mês" min="1" max="12" required style="width: 50%;">
+            </div>
+
+            <button type="submit">Gerar Meu Mapa Astral</button>
+        </form>
+    </div>
+</body>
+</html>
+"""
+
+@app.route('/formulario', methods=['GET'])
+def exibir_formulario():
+    email = request.args.get('email', 'cliente@email.com')
+    return render_template_string(HTML_FORMULARIO, email=email)
+
+@app.route('/gerar-mapa', methods=['POST'])
+def processar_formulario():
+    nome1 = request.form.get('nome1')
+    dia1 = int(request.form.get('dia1'))
+    mes1 = int(request.form.get('mes1'))
+
+    nome2 = request.form.get('nome2')
+    dia2 = int(request.form.get('dia2'))
+    mes2 = int(request.form.get('mes2'))
+    email = request.form.get('email')
+
+    caminho_pdf = gerar_pdf_sinastria(nome1, dia1, mes1, nome2, dia2, mes2)
+
+    return f"""
+    <body style="background:#150726; color:white; text-align:center; font-family:Arial; padding-top:50px;">
+        <h1 style="color:#D4AF37;">✨ Mapa Gerado com Sucesso! ✨</h1>
+        <p>Obrigado, <b>{email}</b>! O mapa astral de <b>{nome1}</b> e <b>{nome2}</b> foi criado.</p>
+        <p>Ficheiro guardado no servidor: <code>{caminho_pdf}</code></p>
+    </body>
+    """
 
 
 if __name__ == '__main__':
-    t = threading.Thread(target=iniciar_servidor)
-    t.daemon = True
-    t.start()
-
-    time.sleep(1)
-
-    print("--- A TESTAR NOVO LAYOUT DO MAPA ASTRAL DO CASAL ---")
-
-    dados_da_venda = {
-        "nome1": "Lucas",
-        "dia1": 12,
-        "mes1": 4,
-        "nome2": "Fernanda",
-        "dia2": 5,
-        "mes2": 11
-    }
-
-    resposta = requests.post("http://127.0.0.1:5000/webhook-venda", json=dados_da_venda)
-    print("Resposta do Servidor:", resposta.json())
+    app.run(host='0.0.0.0', port=5000, debug=False)
